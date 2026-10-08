@@ -38,9 +38,38 @@ export function getParts() {
   return request('/api/parts');
 }
 
+export function getKits() {
+  return request('/api/kits');
+}
+
+export function getIssues(status) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return request(`/api/issues${query}`);
+}
+
 export function createPart(part) {
   return request('/api/parts', {
     method: 'POST',
     body: JSON.stringify(part)
+  });
+}
+
+export function createIssue(issue) {
+  return request('/api/issues', {
+    method: 'POST',
+    body: JSON.stringify(issue)
+  });
+}
+
+export function createKitIssue(issue) {
+  return request('/api/issues/kit', {
+    method: 'POST',
+    body: JSON.stringify(issue)
+  });
+}
+
+export function returnIssue(issueId) {
+  return request(`/api/issues/${encodeURIComponent(issueId)}/return`, {
+    method: 'PATCH'
   });
 }

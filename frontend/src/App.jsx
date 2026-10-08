@@ -1,7 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createPart, getParts } from './services/api'
+import {
+  createIssue,
+  createKitIssue,
+  createPart,
+  getIssues,
+  getKits,
+  getParts,
+  returnIssue,
+} from './services/api'
 
 const initialForm = { name: '', category: '', total_quantity: '' }
+const initialIssueForm = {
+  part_id: '',
+  kit_id: '',
+  member_name: '',
+  registration_number: '',
+  due_date: '',
+  quantity: '1',
+}
+
+function getLocalDateValue() {
+  const now = new Date()
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+  return localDate.toISOString().slice(0, 10)
+}
 
 async function fetchParts() {
   const result = await getParts()
@@ -9,6 +31,14 @@ async function fetchParts() {
     throw new Error('The server returned an invalid inventory response.')
   }
   return result.parts
+}
+
+async function fetchIssueData() {
+  const [kitResult, issueResult] = await Promise.all([getKits(), getIssues('issued')])
+  if (!Array.isArray(kitResult?.kits) || !Array.isArray(issueResult?.issues)) {
+    throw new Error('The server returned an invalid issues response.')
+  }
+  return { kits: kitResult.kits, issues: issueResult.issues }
 }
 
 function Icon({ name, size = 20 }) {
@@ -220,10 +250,301 @@ function AddPartForm({ onClose, onCreate }) {
   )
 }
 
+function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh, onSuccess }) {
+  const [mode, setMode] = useState('part')
+  const [form, setForm] = useState(initialIssueForm)
+  const [formError, setFormError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [returningId, setReturningId] = useState(null)
+  const [returnError, setReturnError] = useState('')
+
+  function updateField(event) {
+    setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
+    setFormError('')
+  }
+
+  async function handleIssueSubmit(event) {
+    event.preventDefault()
+
+    if (!form.member_name.trim()) {
+      setFormError('Enter the borrower’s name.')
+      return
+    }
+    if (!form.registration_number.trim()) {
+      setFormError('Enter the borrower’s registration number.')
+      return
+    }
+    if (!form.due_date || form.due_date < getLocalDateValue()) {
+      setFormError('Choose a valid due date that is today or later.')
+      return
+    }
+
+    let request
+    if (mode === 'part') {
+      const quantity = Number(form.quantity)
+      const partId = Number(form.part_id)
+      const selectedPart = parts.find((part) => Number(part.id) === partId)
+
+      if (!selectedPart) {
+        setFormError('Select a part to issue.')
+        return
+      }
+      if (form.quantity === '' || !Number.isInteger(quantity) || quantity <= 0) {
+        setFormError('Quantity must be a positive whole number.')
+        return
+      }
+      if (quantity > Number(selectedPart.available_quantity)) {
+        setFormError(`Only ${selectedPart.available_quantity} available for ${selectedPart.name}.`)
+        return
+      }
+
+      request = createIssue({
+        part_id: partId,
+        member_name: form.member_name.trim(),
+        registration_number: form.registration_number.trim(),
+        due_date: form.due_date,
+        quantity,
+      })
+    } else {
+      const kitId = Number(form.kit_id)
+      const selectedKit = kits.find((kit) => Number(kit.id) === kitId)
+
+      if (!selectedKit) {
+        setFormError('Select a kit to issue.')
+        return
+      }
+      if (!selectedKit.parts?.length) {
+        setFormError('This kit has no components and cannot be issued.')
+        return
+      }
+      const unavailablePart = selectedKit.parts.find((component) => {
+        const stock = parts.find((part) => Number(part.id) === Number(component.id))
+        return !stock || Number(stock.available_quantity) < Number(component.quantity)
+      })
+      if (unavailablePart) {
+        setFormError(`Not enough stock to issue this kit (${unavailablePart.name}).`)
+        return
+      }
+
+      request = createKitIssue({
+        kit_id: kitId,
+        member_name: form.member_name.trim(),
+        registration_number: form.registration_number.trim(),
+        due_date: form.due_date,
+      })
+    }
+
+    setSaving(true)
+    setFormError('')
+    try {
+      await request
+      setForm(initialIssueForm)
+      onSuccess(mode === 'part' ? 'Part issue recorded.' : 'Kit issue recorded.')
+      await onRefresh()
+    } catch (issueError) {
+      setFormError(issueError.message || 'Unable to record this issue. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleReturn(issue) {
+    setReturningId(issue.id)
+    setReturnError('')
+    try {
+      await returnIssue(issue.id)
+      onSuccess(`${issue.part_name || issue.kit_name} returned successfully.`)
+      await onRefresh()
+    } catch (issueError) {
+      setReturnError(issueError.message || 'Unable to return this issue. Please try again.')
+    } finally {
+      setReturningId(null)
+    }
+  }
+
+  return (
+    <section aria-labelledby="issues-title" className="issues-panel">
+      <div className="issues-panel__heading">
+        <div>
+          <span className="eyebrow">OUT IN THE LAB</span>
+          <h2 id="issues-title">Issues <span className="count-pill">{issues.length}</span></h2>
+          <p>See who has what, and when it’s due back.</p>
+        </div>
+        <span className="issues-panel__caption">WHO HAS WHAT</span>
+      </div>
+
+      {loading ? (
+        <div aria-live="polite" className="issue-loading">
+          <span className="loader" />
+          <p>Loading issues and kits…</p>
+        </div>
+      ) : error ? (
+        <div className="issue-load-error" role="alert">
+          <p>{error}</p>
+          <button className="button button--quiet" onClick={onRetry} type="button">Retry</button>
+        </div>
+      ) : (
+        <>
+          <div className="issue-layout">
+            <form className="issue-form" onSubmit={handleIssueSubmit}>
+              <div className="issue-form__heading">
+                <h3>Check something out</h3>
+                <p>Record a part or a complete kit.</p>
+              </div>
+              <div aria-label="Choose what to issue" className="issue-mode" role="group">
+                <button
+                  aria-pressed={mode === 'part'}
+                  className={mode === 'part' ? 'issue-mode__button is-active' : 'issue-mode__button'}
+                  onClick={() => { setMode('part'); setFormError('') }}
+                  type="button"
+                >
+                  Individual part
+                </button>
+                <button
+                  aria-pressed={mode === 'kit'}
+                  className={mode === 'kit' ? 'issue-mode__button is-active' : 'issue-mode__button'}
+                  onClick={() => { setMode('kit'); setFormError('') }}
+                  type="button"
+                >
+                  Kit
+                </button>
+              </div>
+
+              {mode === 'part' ? (
+                <div className="issue-item-fields">
+                  <label className="issue-field">
+                    Part
+                    <select name="part_id" onChange={updateField} required value={form.part_id}>
+                      <option value="">Choose a part</option>
+                      {parts.map((part) => (
+                        <option key={part.id} value={part.id}>
+                          {part.name} · {part.available_quantity} available
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="issue-field">
+                    Quantity
+                    <input min="1" name="quantity" onChange={updateField} required step="1" type="number" value={form.quantity} />
+                  </label>
+                </div>
+              ) : (
+                <label className="issue-field issue-field--single">
+                  Kit
+                  <select name="kit_id" onChange={updateField} required value={form.kit_id}>
+                    <option value="">Choose a kit</option>
+                    {kits.map((kit) => (
+                      <option key={kit.id} value={kit.id}>
+                        {kit.name}{kit.parts?.length ? ` · ${kit.parts.length} components` : ' · no components'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <label className="issue-field">
+                Borrower name
+                <input autoComplete="name" name="member_name" onChange={updateField} placeholder="e.g. Alex Morgan" required value={form.member_name} />
+              </label>
+              <label className="issue-field">
+                Registration number
+                <input name="registration_number" onChange={updateField} placeholder="e.g. 24RBT018" required value={form.registration_number} />
+              </label>
+              <label className="issue-field">
+                Due date
+                <input min={getLocalDateValue()} name="due_date" onChange={updateField} required type="date" value={form.due_date} />
+              </label>
+
+              {formError && <p className="form-error" role="alert">{formError}</p>}
+              <button className="button button--primary issue-submit" disabled={saving} type="submit">
+                {saving ? 'Recording…' : mode === 'part' ? 'Issue part' : 'Issue kit'}
+                {!saving && <Icon name="arrow" size={17} />}
+              </button>
+            </form>
+
+            <div className="active-issues">
+              <div className="active-issues__heading">
+                <div>
+                  <h3>Currently borrowed</h3>
+                  <p>Active checkouts from your lab</p>
+                </div>
+                <span className="active-issues__count">{issues.length} active</span>
+              </div>
+              {returnError && <p className="issue-return-error" role="alert">{returnError}</p>}
+              {issues.length === 0 ? (
+                <div className="issue-empty">
+                  <span className="empty-state__icon"><Icon name="check" size={23} /></span>
+                  <h3>Nothing checked out</h3>
+                  <p>When someone borrows a part or kit, it’ll show up here.</p>
+                </div>
+              ) : (
+                <div className="table-scroll issue-table-scroll">
+                  <table className="issue-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Borrower</th>
+                        <th scope="col">Item</th>
+                        <th scope="col">Qty</th>
+                        <th scope="col">Due back</th>
+                        <th scope="col">Status</th>
+                        <th scope="col"><span className="sr-only">Return action</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {issues.map((issue) => {
+                        const overdue = issue.due_date < getLocalDateValue()
+                        return (
+                          <tr className={overdue ? 'issue-row issue-row--overdue' : 'issue-row'} key={issue.id}>
+                            <td>
+                              <strong className="borrower-name">{issue.member_name}</strong>
+                              <span className="borrower-id">{issue.registration_number}</span>
+                            </td>
+                            <td>
+                              <strong className="issued-item">{issue.part_name || issue.kit_name || 'Unknown item'}</strong>
+                              <span className="issued-kind">{issue.part_id ? 'Individual part' : 'Kit'}</span>
+                            </td>
+                            <td>{issue.part_id ? issue.quantity : '1 kit'}</td>
+                            <td className={overdue ? 'due-date due-date--overdue' : 'due-date'}>
+                              {issue.due_date}
+                            </td>
+                            <td>
+                              <span className={overdue ? 'status status--overdue' : 'status status--in'}>
+                                {overdue ? 'Overdue' : 'Issued'}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                className="return-button"
+                                disabled={returningId !== null}
+                                onClick={() => handleReturn(issue)}
+                                type="button"
+                              >
+                                {returningId === issue.id ? 'Returning…' : 'Return'}
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
+
 function App() {
   const [parts, setParts] = useState([])
+  const [kits, setKits] = useState([])
+  const [issues, setIssues] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  const [issuesLoading, setIssuesLoading] = useState(true)
+  const [issuesError, setIssuesError] = useState('')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -241,6 +562,34 @@ function App() {
     }
   }
 
+  async function refreshIssues() {
+    try {
+      const data = await fetchIssueData()
+      setKits(data.kits)
+      setIssues(data.issues)
+      setIssuesError('')
+    } catch (error) {
+      setIssuesError(error.message || 'Unable to load issues. Please try again.')
+    } finally {
+      setIssuesLoading(false)
+    }
+  }
+
+  async function retryIssues() {
+    setIssuesLoading(true)
+    setIssuesError('')
+    await refreshIssues()
+  }
+
+  async function refreshAfterIssueChange() {
+    await Promise.all([
+      refreshIssues(),
+      fetchParts()
+        .then(setParts)
+        .catch(() => setLoadError(true)),
+    ])
+  }
+
   useEffect(() => {
     let active = true
     fetchParts()
@@ -252,6 +601,26 @@ function App() {
       })
       .finally(() => {
         if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    fetchIssueData()
+      .then((data) => {
+        if (active) {
+          setKits(data.kits)
+          setIssues(data.issues)
+        }
+      })
+      .catch((error) => {
+        if (active) setIssuesError(error.message || 'Unable to load issues. Please try again.')
+      })
+      .finally(() => {
+        if (active) setIssuesLoading(false)
       })
     return () => {
       active = false
@@ -373,6 +742,16 @@ function App() {
                 </div>
               )}
             </section>
+            <IssueSection
+              error={issuesError}
+              issues={issues}
+              kits={kits}
+              loading={issuesLoading}
+              onRefresh={refreshAfterIssueChange}
+              onRetry={retryIssues}
+              onSuccess={setSuccessMessage}
+              parts={parts}
+            />
             <footer className="dashboard-footer">
               <span><span className="footer-dot" /> Made for curious minds &amp; messy workbenches.</span>
               <span>PARTSPAL · ROBOTICS LAB</span>
