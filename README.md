@@ -154,12 +154,20 @@ The QR payload identifies the item; QR scanning to navigate to an item page is n
 
 ## Screenshots
 
-- **Dashboard / Inventory:** Screenshot can be added here.
-- **Custom Kits:** Screenshot can be added here.
-- **Issues / Who Has What:** Screenshot can be added here.
-- **QR Label:** Screenshot can be added here.
+- **Dashboard / Inventory:**
+ <img width="1901" height="867" alt="image" src="https://github.com/user-attachments/assets/6c4db4c9-7ed8-4236-b20d-0f6af25e434c" />
 
-Screenshots can be added here when the actual image files are placed in the repository.
+- **Custom Kits:**
+ <img width="1882" height="796" alt="image" src="https://github.com/user-attachments/assets/45fb164f-6932-4bfe-af63-5ad2df3d5542" />
+
+- **Issues / Who Has What:**
+ <img width="1892" height="866" alt="image" src="https://github.com/user-attachments/assets/985b240d-538e-45a6-9ec1-b2230dbc2b7f" />
+
+- **QR Label:**
+ <img width="1897" height="858" alt="image" src="https://github.com/user-attachments/assets/32cc1718-405d-4c3c-b332-03290aadf5d3" />
+
+
+
 
 ## Testing and verification
 
