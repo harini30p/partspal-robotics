@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('./database');
+const partsRouter = require('./routes/parts');
 
 const app = express();
 const PORT = 5000;
@@ -15,6 +16,13 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.use('/api/parts', partsRouter);
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
+
