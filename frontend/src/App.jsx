@@ -9,6 +9,7 @@ import {
   getParts,
   returnIssue,
 } from './services/api'
+import QRLabel from './components/QRLabel'
 
 const initialForm = { name: '', category: '', total_quantity: '' }
 const initialIssueForm = {
@@ -122,7 +123,7 @@ function PartStatus({ quantity }) {
   return <span className="status status--in">In Stock</span>
 }
 
-function InventoryTable({ parts }) {
+function InventoryTable({ parts, onShowQR }) {
   if (parts.length === 0) {
     return (
       <div className="empty-state">
@@ -143,6 +144,7 @@ function InventoryTable({ parts }) {
             <th scope="col">Total</th>
             <th scope="col">Available</th>
             <th scope="col">Status</th>
+            <th scope="col">Label</th>
           </tr>
         </thead>
         <tbody>
@@ -160,6 +162,20 @@ function InventoryTable({ parts }) {
                 {part.available_quantity}
               </td>
               <td><PartStatus quantity={Number(part.available_quantity)} /></td>
+              <td>
+                <button
+                  className="qr-label-action"
+                  onClick={() => onShowQR({
+                    kind: 'part',
+                    name: part.name,
+                    identifier: `PART-${part.id}`,
+                    payload: `part:${part.id}`,
+                  })}
+                  type="button"
+                >
+                  QR Label
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -714,7 +730,7 @@ function MemberHistory({ issues, loading, error, onRetry }) {
   )
 }
 
-function KitSection({ parts, kits, loading, error, onCreate, onRetry }) {
+function KitSection({ parts, kits, loading, error, onCreate, onRetry, onShowQR }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [components, setComponents] = useState([{ part_id: '', quantity: '1' }])
@@ -935,6 +951,18 @@ function KitSection({ parts, kits, loading, error, onCreate, onRetry }) {
                   ) : (
                     <p className="kit-card__empty">No components listed.</p>
                   )}
+                  <button
+                    className="qr-label-action kit-card__qr-action"
+                    onClick={() => onShowQR({
+                      kind: 'kit',
+                      name: kit.name,
+                      identifier: `KIT-${kit.id}`,
+                      payload: `kit:${kit.id}`,
+                    })}
+                    type="button"
+                  >
+                    QR Label
+                  </button>
                 </article>
               ))}
             </div>
@@ -959,6 +987,7 @@ function App() {
   const [category, setCategory] = useState('all')
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+  const [qrLabel, setQrLabel] = useState(null)
 
   async function loadParts() {
     setLoading(true)
@@ -1169,7 +1198,7 @@ function App() {
                       </select>
                     </label>
                   </div>
-                  <InventoryTable parts={filteredParts} />
+                  <InventoryTable onShowQR={setQrLabel} parts={filteredParts} />
                   <div className="table-footer">
                     <span>Showing <strong>{filteredParts.length}</strong> of <strong>{parts.length}</strong> part types</span>
                     <span className="table-footer__note"><span /> Synced with your lab</span>
@@ -1192,6 +1221,7 @@ function App() {
               loading={kitsLoading}
               onCreate={handleCreateKit}
               onRetry={retryIssues}
+              onShowQR={setQrLabel}
               parts={parts}
             />
             <IssueSection
@@ -1218,6 +1248,7 @@ function App() {
         )}
       </main>
       {isFormOpen && <AddPartForm onClose={() => setIsFormOpen(false)} onCreate={handleCreate} />}
+      {qrLabel && <QRLabel item={qrLabel} onClose={() => setQrLabel(null)} />}
     </div>
   )
 }
