@@ -3,6 +3,7 @@ const cors = require('cors');
 require('./database');
 const partsRouter = require('./routes/parts');
 const kitsRouter = require('./routes/kits');
+const issuesRouter = require('./routes/issues');
 
 const app = express();
 const PORT = 5000;
@@ -19,6 +20,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/parts', partsRouter);
 app.use('/api/kits', kitsRouter);
+app.use('/api/issues', issuesRouter);
 
 if (require.main === module) {
   app.listen(PORT, () => {
