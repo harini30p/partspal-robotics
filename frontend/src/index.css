@@ -2309,3 +2309,51 @@ th:first-child {
     font-size: 6pt !important;
   }
 }
+
+@media screen and (max-width: 560px) {
+  .modal-backdrop,
+  .qr-label-overlay {
+    align-items: start;
+    overflow-y: auto;
+    padding: 12px;
+  }
+
+  .modal,
+  .qr-label-dialog {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    margin-block: auto;
+  }
+
+  .icon-button,
+  .qr-label-action,
+  .return-button,
+  .kit-component-remove,
+  .issue-mode__button {
+    min-height: 42px;
+  }
+
+  .kit-component-remove {
+    width: 40px;
+  }
+
+  .kit-component-row {
+    grid-template-columns: minmax(0, 1fr) 85px 40px;
+  }
+
+  .qr-label-screen-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .qr-label-screen-actions > div {
+    width: 100%;
+  }
+
+  .qr-label-screen-actions .button {
+    min-height: 42px;
+    flex: 1;
+  }
+}
