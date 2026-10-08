@@ -35,7 +35,7 @@ async function fetchParts() {
 }
 
 async function fetchIssueData() {
-  const [kitResult, issueResult] = await Promise.all([getKits(), getIssues('issued')])
+  const [kitResult, issueResult] = await Promise.all([getKits(), getIssues()])
   if (!Array.isArray(kitResult?.kits) || !Array.isArray(issueResult?.issues)) {
     throw new Error('The server returned an invalid issues response.')
   }
@@ -258,6 +258,7 @@ function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh,
   const [saving, setSaving] = useState(false)
   const [returningId, setReturningId] = useState(null)
   const [returnError, setReturnError] = useState('')
+  const activeIssues = issues.filter((issue) => issue.status === 'issued')
 
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
@@ -469,10 +470,10 @@ function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh,
                   <h3>Currently borrowed</h3>
                   <p>Active checkouts from your lab</p>
                 </div>
-                <span className="active-issues__count">{issues.length} active</span>
+                <span className="active-issues__count">{activeIssues.length} active</span>
               </div>
               {returnError && <p className="issue-return-error" role="alert">{returnError}</p>}
-              {issues.length === 0 ? (
+              {activeIssues.length === 0 ? (
                 <div className="issue-empty">
                   <span className="empty-state__icon"><Icon name="check" size={23} /></span>
                   <h3>Nothing checked out</h3>
@@ -492,7 +493,7 @@ function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh,
                       </tr>
                     </thead>
                     <tbody>
-                      {issues.map((issue) => {
+                      {activeIssues.map((issue) => {
                         const overdue = issue.due_date < getLocalDateValue()
                         return (
                           <tr className={overdue ? 'issue-row issue-row--overdue' : 'issue-row'} key={issue.id}>
@@ -533,6 +534,120 @@ function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh,
             </div>
           </div>
         </>
+      )}
+    </section>
+  )
+}
+
+function formatHistoryDate(value) {
+  if (!value) return '—'
+  const date = new Date(value.length === 10 ? `${value}T00:00:00` : value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(date)
+}
+
+function MemberHistory({ issues, loading, error, onRetry }) {
+  const [search, setSearch] = useState('')
+  const normalizedQuery = search.trim().toLocaleLowerCase()
+  const matchingIssues = issues.filter((issue) => (
+    !normalizedQuery
+    || issue.member_name?.toLocaleLowerCase().includes(normalizedQuery)
+    || issue.registration_number?.toLocaleLowerCase().includes(normalizedQuery)
+  ))
+
+  return (
+    <section aria-labelledby="member-history-title" className="history-panel">
+      <div className="history-panel__heading">
+        <div>
+          <span className="eyebrow">EVERY CHECKOUT, ACCOUNTED FOR</span>
+          <h2 id="member-history-title">Member History <span className="count-pill">{issues.length}</span></h2>
+          <p>Search past and present checkouts by name or registration number.</p>
+        </div>
+        {!loading && !error && (
+          <span className="history-panel__caption">{matchingIssues.length} {matchingIssues.length === 1 ? 'record' : 'records'}</span>
+        )}
+      </div>
+
+      <label className="history-search">
+        <Icon name="search" size={18} />
+        <span className="sr-only">Search member name or registration number</span>
+        <input
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search member name or registration number…"
+          type="search"
+          value={search}
+        />
+      </label>
+
+      {loading ? (
+        <div aria-live="polite" className="history-message">
+          <span className="loader" />
+          <p>Loading member history…</p>
+        </div>
+      ) : error ? (
+        <div className="history-message history-message--error" role="alert">
+          <p>{error}</p>
+          <button className="button button--quiet" onClick={onRetry} type="button">Retry</button>
+        </div>
+      ) : matchingIssues.length === 0 ? (
+        <div className="history-empty">
+          <span className="empty-state__icon"><Icon name="search" size={23} /></span>
+          <h3>{normalizedQuery ? 'No matching history' : 'No issue history yet'}</h3>
+          <p>
+            {normalizedQuery
+              ? 'Try another member name or registration number.'
+              : 'Issued and returned parts and kits will appear here.'}
+          </p>
+        </div>
+      ) : (
+        <div className="table-scroll history-table-scroll">
+          <table className="history-table">
+            <thead>
+              <tr>
+                <th scope="col">Member</th>
+                <th scope="col">Item</th>
+                <th scope="col">Qty</th>
+                <th scope="col">Issued</th>
+                <th scope="col">Due</th>
+                <th scope="col">Returned</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {matchingIssues.map((issue) => {
+                const active = issue.status === 'issued'
+                const overdue = active && issue.due_date < getLocalDateValue()
+                return (
+                  <tr className={overdue ? 'history-row history-row--overdue' : 'history-row'} key={issue.id}>
+                    <td>
+                      <strong className="borrower-name">{issue.member_name}</strong>
+                      <span className="borrower-id">{issue.registration_number}</span>
+                    </td>
+                    <td>
+                      <strong className="issued-item">{issue.part_name || issue.kit_name || 'Unknown item'}</strong>
+                      <span className="issued-kind">{issue.part_id ? 'Individual part' : 'Kit'}</span>
+                    </td>
+                    <td>{issue.part_id ? issue.quantity : '1 kit'}</td>
+                    <td>{formatHistoryDate(issue.issued_at)}</td>
+                    <td className={overdue ? 'due-date due-date--overdue' : 'due-date'}>
+                      {formatHistoryDate(issue.due_date)}
+                    </td>
+                    <td>{formatHistoryDate(issue.returned_at)}</td>
+                    <td>
+                      <span className={overdue ? 'status status--overdue' : active ? 'status status--in' : 'status status--returned'}>
+                        {overdue ? 'Overdue' : active ? 'Active' : 'Returned'}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   )
@@ -1027,6 +1142,12 @@ function App() {
               onRetry={retryIssues}
               onSuccess={setSuccessMessage}
               parts={parts}
+            />
+            <MemberHistory
+              error={issuesError}
+              issues={issues}
+              loading={issuesLoading}
+              onRetry={retryIssues}
             />
             <footer className="dashboard-footer">
               <span><span className="footer-dot" /> Made for curious minds &amp; messy workbenches.</span>
