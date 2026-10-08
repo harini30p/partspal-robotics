@@ -42,6 +42,13 @@ export function getKits() {
   return request('/api/kits');
 }
 
+export function createKit(kit) {
+  return request('/api/kits', {
+    method: 'POST',
+    body: JSON.stringify(kit)
+  });
+}
+
 export function getIssues(status) {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
   return request(`/api/issues${query}`);

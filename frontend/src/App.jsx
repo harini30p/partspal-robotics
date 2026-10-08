@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   createIssue,
+  createKit,
   createKitIssue,
   createPart,
   getIssues,
@@ -537,6 +538,237 @@ function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh,
   )
 }
 
+function KitSection({ parts, kits, loading, error, onCreate, onRetry }) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [components, setComponents] = useState([{ part_id: '', quantity: '1' }])
+  const [formError, setFormError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function updateComponent(index, field, value) {
+    setComponents((current) => current.map((component, rowIndex) => (
+      rowIndex === index ? { ...component, [field]: value } : component
+    )))
+    setFormError('')
+  }
+
+  function addComponent() {
+    setComponents((current) => [...current, { part_id: '', quantity: '1' }])
+  }
+
+  function removeComponent(index) {
+    setComponents((current) => current.filter((_, rowIndex) => rowIndex !== index))
+    setFormError('')
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+
+    if (!name.trim()) {
+      setFormError('Enter a name for this kit.')
+      return
+    }
+    if (components.length === 0) {
+      setFormError('Add at least one part to the kit.')
+      return
+    }
+
+    const selectedIds = new Set()
+    const payloadParts = []
+    for (const component of components) {
+      const partId = Number(component.part_id)
+      const quantity = Number(component.quantity)
+      if (!parts.some((part) => Number(part.id) === partId)) {
+        setFormError('Choose an existing part for every component.')
+        return
+      }
+      if (selectedIds.has(partId)) {
+        setFormError('Each part can only appear once in a kit. Update its quantity instead.')
+        return
+      }
+      if (component.quantity === '' || !Number.isInteger(quantity) || quantity <= 0) {
+        setFormError('Every component quantity must be a positive whole number.')
+        return
+      }
+      selectedIds.add(partId)
+      payloadParts.push({ part_id: partId, quantity })
+    }
+
+    setSaving(true)
+    setFormError('')
+    try {
+      await onCreate({
+        name: name.trim(),
+        description: description.trim(),
+        parts: payloadParts,
+      })
+      setName('')
+      setDescription('')
+      setComponents([{ part_id: '', quantity: '1' }])
+    } catch (createError) {
+      setFormError(createError.message || 'Unable to create this kit. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section aria-labelledby="kits-title" className="kits-panel">
+      <div className="kits-panel__heading">
+        <div>
+          <span className="eyebrow">BUILT FOR YOUR NEXT PROJECT</span>
+          <h2 id="kits-title">Kits <span className="count-pill">{kits.length}</span></h2>
+          <p>Group the parts your team reaches for together.</p>
+        </div>
+      </div>
+
+      <div className="kits-layout">
+        <form className="kit-form" onSubmit={handleSubmit}>
+          <div className="kit-form__heading">
+            <h3>Create a custom kit</h3>
+            <p>Choose any parts in your inventory and set quantities.</p>
+          </div>
+          <label className="issue-field">
+            Kit name
+            <input
+              name="name"
+              onChange={(event) => { setName(event.target.value); setFormError('') }}
+              placeholder="e.g. Line-following robot"
+              required
+              value={name}
+            />
+          </label>
+          <label className="issue-field">
+            Description <span className="optional-label">Optional</span>
+            <textarea
+              name="description"
+              onChange={(event) => { setDescription(event.target.value); setFormError('') }}
+              placeholder="What can you build with this kit?"
+              rows="2"
+              value={description}
+            />
+          </label>
+
+          <div className="kit-components">
+            <div className="kit-components__heading">
+              <span>Kit components</span>
+              <span>{components.length} {components.length === 1 ? 'part' : 'parts'}</span>
+            </div>
+            {components.map((component, index) => (
+              <div className="kit-component-row" key={index}>
+                <label className="sr-only" htmlFor={`kit-part-${index}`}>Component {index + 1} part</label>
+                <select
+                  id={`kit-part-${index}`}
+                  onChange={(event) => updateComponent(index, 'part_id', event.target.value)}
+                  required
+                  value={component.part_id}
+                >
+                  <option value="">Choose a part</option>
+                  {parts.map((part) => (
+                    <option
+                      disabled={components.some((other, otherIndex) => (
+                        otherIndex !== index && other.part_id === String(part.id)
+                      ))}
+                      key={part.id}
+                      value={part.id}
+                    >
+                      {part.name} · {part.category}
+                    </option>
+                  ))}
+                </select>
+                <label className="sr-only" htmlFor={`kit-quantity-${index}`}>Component {index + 1} quantity</label>
+                <input
+                  id={`kit-quantity-${index}`}
+                  min="1"
+                  onChange={(event) => updateComponent(index, 'quantity', event.target.value)}
+                  placeholder="Qty"
+                  required
+                  step="1"
+                  type="number"
+                  value={component.quantity}
+                />
+                <button
+                  aria-label={`Remove component ${index + 1}`}
+                  className="kit-component-remove"
+                  disabled={components.length === 1}
+                  onClick={() => removeComponent(index)}
+                  type="button"
+                >
+                  <Icon name="close" size={15} />
+                </button>
+              </div>
+            ))}
+            <button className="add-component-button" disabled={components.length >= parts.length} onClick={addComponent} type="button">
+              <Icon name="plus" size={15} /> Add component
+            </button>
+            {parts.length === 0 && <p className="kit-form-hint">Add inventory parts before creating a kit.</p>}
+          </div>
+
+          {formError && <p className="form-error" role="alert">{formError}</p>}
+          <button className="button button--primary kit-submit" disabled={saving || parts.length === 0} type="submit">
+            {saving ? 'Creating kit…' : 'Create kit'}
+            {!saving && <Icon name="arrow" size={17} />}
+          </button>
+        </form>
+
+        <div className="kit-collection">
+          <div className="kit-collection__heading">
+            <div>
+              <h3>Your kits</h3>
+              <p>Ready-made collections for the lab</p>
+            </div>
+            <span className="active-issues__count">{kits.length} {kits.length === 1 ? 'kit' : 'kits'}</span>
+          </div>
+          {loading ? (
+            <div aria-live="polite" className="kits-message">
+              <span className="loader" />
+              <p>Loading kits…</p>
+            </div>
+          ) : error ? (
+            <div className="kits-message kits-message--error" role="alert">
+              <p>{error}</p>
+              <button className="button button--quiet" onClick={onRetry} type="button">Retry</button>
+            </div>
+          ) : kits.length === 0 ? (
+            <div className="kits-message">
+              <span className="empty-state__icon"><Icon name="boxes" size={23} /></span>
+              <h3>No kits yet</h3>
+              <p>Make your first custom kit from parts already in your inventory.</p>
+            </div>
+          ) : (
+            <div className="kit-list">
+              {kits.map((kit) => (
+                <article className="kit-card" key={kit.id}>
+                  <div className="kit-card__top">
+                    <span className="kit-card__icon"><Icon name="boxes" size={18} /></span>
+                    <div className="kit-card__title">
+                      <h4>{kit.name}</h4>
+                      <span>{kit.parts.length} {kit.parts.length === 1 ? 'component' : 'components'}</span>
+                    </div>
+                  </div>
+                  {kit.description && <p className="kit-card__description">{kit.description}</p>}
+                  {kit.parts.length > 0 ? (
+                    <ul className="kit-card__parts">
+                      {kit.parts.map((part) => (
+                        <li key={part.id}>
+                          <span>{part.name}</span>
+                          <span className="kit-part-quantity">× {part.quantity}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="kit-card__empty">No components listed.</p>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function App() {
   const [parts, setParts] = useState([])
   const [kits, setKits] = useState([])
@@ -545,6 +777,8 @@ function App() {
   const [loadError, setLoadError] = useState(false)
   const [issuesLoading, setIssuesLoading] = useState(true)
   const [issuesError, setIssuesError] = useState('')
+  const [kitsLoading, setKitsLoading] = useState(true)
+  const [kitsError, setKitsError] = useState('')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -566,18 +800,45 @@ function App() {
     try {
       const data = await fetchIssueData()
       setKits(data.kits)
+      setKitsError('')
       setIssues(data.issues)
       setIssuesError('')
     } catch (error) {
+      setKitsError(error.message || 'Unable to load kits. Please try again.')
       setIssuesError(error.message || 'Unable to load issues. Please try again.')
     } finally {
+      setKitsLoading(false)
       setIssuesLoading(false)
     }
   }
 
+  async function refreshKits() {
+    setKitsLoading(true)
+    try {
+      const result = await getKits()
+      if (!Array.isArray(result?.kits)) {
+        throw new Error('The server returned an invalid kits response.')
+      }
+      setKits(result.kits)
+      setKitsError('')
+    } catch (error) {
+      setKitsError(error.message || 'Unable to load kits. Please try again.')
+    } finally {
+      setKitsLoading(false)
+    }
+  }
+
+  async function handleCreateKit(kit) {
+    await createKit(kit)
+    setSuccessMessage(`${kit.name} kit created.`)
+    await refreshKits()
+  }
+
   async function retryIssues() {
     setIssuesLoading(true)
+    setKitsLoading(true)
     setIssuesError('')
+    setKitsError('')
     await refreshIssues()
   }
 
@@ -613,14 +874,21 @@ function App() {
       .then((data) => {
         if (active) {
           setKits(data.kits)
+          setKitsError('')
           setIssues(data.issues)
         }
       })
       .catch((error) => {
-        if (active) setIssuesError(error.message || 'Unable to load issues. Please try again.')
+        if (active) {
+          setKitsError(error.message || 'Unable to load kits. Please try again.')
+          setIssuesError(error.message || 'Unable to load issues. Please try again.')
+        }
       })
       .finally(() => {
-        if (active) setIssuesLoading(false)
+        if (active) {
+          setKitsLoading(false)
+          setIssuesLoading(false)
+        }
       })
     return () => {
       active = false
@@ -742,6 +1010,14 @@ function App() {
                 </div>
               )}
             </section>
+            <KitSection
+              error={kitsError}
+              kits={kits}
+              loading={kitsLoading}
+              onCreate={handleCreateKit}
+              onRetry={retryIssues}
+              parts={parts}
+            />
             <IssueSection
               error={issuesError}
               issues={issues}
