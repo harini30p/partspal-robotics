@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const database = new Database(path.join(__dirname, 'partspal.db'));
+const database = new Database(process.env.DB_PATH || path.join(__dirname, 'partspal.db'));
 
 database.pragma('foreign_keys = ON');
 
