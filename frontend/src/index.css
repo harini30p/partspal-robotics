@@ -472,11 +472,22 @@ th:first-child {
   font-weight: 600;
 }
 
+.quantity-cell--low {
+  color: #80520d;
+  font-weight: 800;
+}
+
+.quantity-cell--out {
+  color: #a94335;
+  font-weight: 800;
+}
+
 .status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
+  border: 1px solid transparent;
   border-radius: 20px;
   font-size: 9px;
   font-weight: 700;
@@ -491,18 +502,21 @@ th:first-child {
 }
 
 .status--in {
-  background: #edf6ef;
-  color: #45835d;
+  border-color: #cfe4d4;
+  background: #e8f5eb;
+  color: #2f7048;
 }
 
 .status--low {
-  background: #fff6e9;
-  color: #b77a21;
+  border-color: #f0d59d;
+  background: #fff2d5;
+  color: #80520d;
 }
 
 .status--out {
-  background: #fff0ed;
-  color: #bd6255;
+  border-color: #edc2b9;
+  background: #ffebe6;
+  color: #a94335;
 }
 
 .table-footer {
@@ -1020,6 +1034,108 @@ th:first-child {
   border: 1px solid #e8eee8;
   border-radius: 10px;
   background: #fafbf9;
+}
+
+.selected-stock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid #e7ece6;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.selected-stock__current {
+  color: #68766f;
+  font-size: 10px;
+}
+
+.selected-stock__current strong {
+  margin-left: 4px;
+  color: #394a41;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stock-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid;
+  border-radius: 7px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.stock-warning > span:last-child,
+.stock-warning > div {
+  min-width: 0;
+}
+
+.stock-warning strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.stock-warning__icon {
+  width: 19px;
+  height: 19px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.stock-warning--low {
+  border-color: #f0d59d;
+  background: #fff8e9;
+  color: #80520d;
+}
+
+.stock-warning--low .stock-warning__icon {
+  background: #f9e8bd;
+  color: #80520d;
+}
+
+.stock-warning--out {
+  border-color: #edc2b9;
+  background: #fff4f1;
+  color: #9b3f32;
+}
+
+.stock-warning--out .stock-warning__icon {
+  background: #f8dcd5;
+  color: #9b3f32;
+}
+
+.stock-warning--ok {
+  border-color: #cfe4d4;
+  background: #f1f8f2;
+  color: #39704b;
+}
+
+.stock-warning--ok .stock-warning__icon {
+  background: #dcefe0;
+  color: #39704b;
+}
+
+.stock-warning__list {
+  display: grid;
+  gap: 3px;
+  margin: 5px 0;
+  padding-left: 17px;
+}
+
+.stock-warning--out > div > span:last-child {
+  color: #8d625c;
+  font-size: 9px;
 }
 
 .issue-form__heading h3,

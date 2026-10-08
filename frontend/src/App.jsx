@@ -113,8 +113,12 @@ function SummaryCards({ parts }) {
 }
 
 function PartStatus({ quantity }) {
-  if (quantity === 0) return <span className="status status--out">Out of Stock</span>
-  if (quantity <= 2) return <span className="status status--low">Low Stock</span>
+  if (quantity === 0) {
+    return <span className="status status--out">Out of Stock</span>
+  }
+  if (quantity <= 2) {
+    return <span className="status status--low">Low Stock · {quantity}</span>
+  }
   return <span className="status status--in">In Stock</span>
 }
 
@@ -152,7 +156,9 @@ function InventoryTable({ parts }) {
               </td>
               <td><span className="category-label">{part.category}</span></td>
               <td className="quantity-cell">{part.total_quantity}</td>
-              <td className="quantity-cell">{part.available_quantity}</td>
+              <td className={`quantity-cell ${Number(part.available_quantity) === 0 ? 'quantity-cell--out' : Number(part.available_quantity) <= 2 ? 'quantity-cell--low' : ''}`}>
+                {part.available_quantity}
+              </td>
               <td><PartStatus quantity={Number(part.available_quantity)} /></td>
             </tr>
           ))}
@@ -259,6 +265,28 @@ function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh,
   const [returningId, setReturningId] = useState(null)
   const [returnError, setReturnError] = useState('')
   const activeIssues = issues.filter((issue) => issue.status === 'issued')
+  const selectedPart = parts.find((part) => Number(part.id) === Number(form.part_id))
+  const requestedQuantity = Number(form.quantity)
+  const availableQuantity = Number(selectedPart?.available_quantity || 0)
+  const requestedQuantityIsValid = form.quantity !== ''
+    && Number.isInteger(requestedQuantity)
+    && requestedQuantity > 0
+  const partStockWarning = selectedPart && requestedQuantityIsValid
+    ? requestedQuantity > availableQuantity
+      ? { kind: 'out', message: `Requested quantity (${requestedQuantity}) exceeds the ${availableQuantity} available.` }
+      : availableQuantity - requestedQuantity === 0
+        ? { kind: 'out', message: 'This checkout would leave the part out of stock.' }
+        : availableQuantity - requestedQuantity <= 2
+          ? { kind: 'low', message: `This checkout would leave low stock (${availableQuantity - requestedQuantity} remaining).` }
+          : null
+    : null
+  const selectedKit = kits.find((kit) => Number(kit.id) === Number(form.kit_id))
+  const kitStockWarnings = selectedKit?.parts?.flatMap((component) => {
+    const stock = parts.find((part) => Number(part.id) === Number(component.id))
+    const available = Number(stock?.available_quantity || 0)
+    const required = Number(component.quantity)
+    return available < required ? [{ name: component.name, required, available }] : []
+  }) || []
 
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
@@ -295,11 +323,6 @@ function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh,
         setFormError('Quantity must be a positive whole number.')
         return
       }
-      if (quantity > Number(selectedPart.available_quantity)) {
-        setFormError(`Only ${selectedPart.available_quantity} available for ${selectedPart.name}.`)
-        return
-      }
-
       request = createIssue({
         part_id: partId,
         member_name: form.member_name.trim(),
@@ -309,22 +332,14 @@ function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh,
       })
     } else {
       const kitId = Number(form.kit_id)
-      const selectedKit = kits.find((kit) => Number(kit.id) === kitId)
+      const selectedKitForIssue = kits.find((kit) => Number(kit.id) === kitId)
 
-      if (!selectedKit) {
+      if (!selectedKitForIssue) {
         setFormError('Select a kit to issue.')
         return
       }
-      if (!selectedKit.parts?.length) {
+      if (!selectedKitForIssue.parts?.length) {
         setFormError('This kit has no components and cannot be issued.')
-        return
-      }
-      const unavailablePart = selectedKit.parts.find((component) => {
-        const stock = parts.find((part) => Number(part.id) === Number(component.id))
-        return !stock || Number(stock.available_quantity) < Number(component.quantity)
-      })
-      if (unavailablePart) {
-        setFormError(`Not enough stock to issue this kit (${unavailablePart.name}).`)
         return
       }
 
@@ -413,23 +428,46 @@ function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh,
               </div>
 
               {mode === 'part' ? (
-                <div className="issue-item-fields">
-                  <label className="issue-field">
-                    Part
-                    <select name="part_id" onChange={updateField} required value={form.part_id}>
-                      <option value="">Choose a part</option>
-                      {parts.map((part) => (
-                        <option key={part.id} value={part.id}>
-                          {part.name} · {part.available_quantity} available
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="issue-field">
-                    Quantity
-                    <input min="1" name="quantity" onChange={updateField} required step="1" type="number" value={form.quantity} />
-                  </label>
-                </div>
+                <>
+                  <div className="issue-item-fields">
+                    <label className="issue-field">
+                      Part
+                      <select name="part_id" onChange={updateField} required value={form.part_id}>
+                        <option value="">Choose a part</option>
+                        {parts.map((part) => (
+                          <option key={part.id} value={part.id}>
+                            {part.name} · {part.available_quantity} available
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="issue-field">
+                      Quantity
+                      <input min="1" name="quantity" onChange={updateField} required step="1" type="number" value={form.quantity} />
+                    </label>
+                  </div>
+                  {selectedPart && (
+                    <div className="selected-stock">
+                      <span className="selected-stock__current">
+                        Available now <strong>{availableQuantity}</strong>
+                      </span>
+                      <PartStatus quantity={availableQuantity} />
+                    </div>
+                  )}
+                  {partStockWarning && (
+                    <div
+                      aria-live="polite"
+                      className={`stock-warning stock-warning--${partStockWarning.kind}`}
+                      role="status"
+                    >
+                      <span className="stock-warning__icon">!</span>
+                      <span>
+                        <strong>{partStockWarning.kind === 'out' ? 'Stock warning' : 'Low stock warning'}</strong>
+                        {partStockWarning.message} The server will confirm availability.
+                      </span>
+                    </div>
+                  )}
+                </>
               ) : (
                 <label className="issue-field issue-field--single">
                   Kit
@@ -442,6 +480,29 @@ function IssueSection({ parts, kits, issues, loading, error, onRetry, onRefresh,
                     ))}
                   </select>
                 </label>
+              )}
+              {mode === 'kit' && selectedKit && (
+                kitStockWarnings.length > 0 ? (
+                  <div className="stock-warning stock-warning--out" role="status">
+                    <span className="stock-warning__icon">!</span>
+                    <div>
+                      <strong>Not enough stock for this kit</strong>
+                      <ul className="stock-warning__list">
+                        {kitStockWarnings.map((warning) => (
+                          <li key={warning.name}>
+                            {warning.name}: requires {warning.required}, {warning.available} available
+                          </li>
+                        ))}
+                      </ul>
+                      <span>The server will confirm availability when you submit.</span>
+                    </div>
+                  </div>
+                ) : selectedKit.parts?.length > 0 ? (
+                  <div className="stock-warning stock-warning--ok" role="status">
+                    <span className="stock-warning__icon">✓</span>
+                    <span><strong>Kit stock looks good.</strong> All components currently meet the required quantities.</span>
+                  </div>
+                ) : null
               )}
 
               <label className="issue-field">
