@@ -2,6 +2,12 @@
 
 PartsPal is a full-stack robotics lab inventory and lending management application. It helps a club track parts and custom kits, record who has borrowed them, monitor stock, and print QR asset labels.
 
+## Live Demo
+
+- [Frontend](https://partspal-eight.vercel.app/)
+- [Backend API](https://partspal-api.onrender.com)
+- [Health check](https://partspal-api.onrender.com/api/health)
+
 ## Key features
 
 - Add and browse inventory parts, with search and category filtering.
@@ -22,7 +28,7 @@ PartsPal is a full-stack robotics lab inventory and lending management applicati
 
 ## Architecture
 
-The React application in `frontend/` calls the Express REST API in `backend/`. The API validates requests and reads or updates the SQLite database through `better-sqlite3`. The backend listens on port `5000`; the frontend API client connects to `http://localhost:5000`.
+For local development, the React/Vite frontend in `frontend/` calls the Express API in `backend/` at `http://localhost:5000`. The deployed frontend runs on Vercel, and the deployed backend/API runs on Render. The API validates requests and reads or updates the SQLite database through `better-sqlite3`.
 
 ```text
 React + Vite frontend
@@ -146,9 +152,22 @@ QR codes are generated in the browser as SVG using `qrcode.react`. The payload i
 
 The QR payload identifies the item; QR scanning to navigate to an item page is not implemented.
 
+## Screenshots
+
+- **Dashboard / Inventory:** Screenshot can be added here.
+- **Custom Kits:** Screenshot can be added here.
+- **Issues / Who Has What:** Screenshot can be added here.
+- **QR Label:** Screenshot can be added here.
+
+Screenshots can be added here when the actual image files are placed in the repository.
+
 ## Testing and verification
 
 The frontend provides `npm run lint` and `npm run build`; both have been run successfully during implementation. There is no configured automated frontend or backend workflow test suite. The backend's `npm test` command is a placeholder, not a test runner.
+
+## How I Used AI
+
+AI assistance supported implementation work such as scaffolding, debugging, validation, UI improvements, and documentation. I handled the project scope, feature decisions, testing, and final verification.
 
 ## Future ideas
 
@@ -157,7 +176,6 @@ These are possible future improvements and are not current features:
 - Scan a QR code to open the corresponding item page.
 - Add authentication and role-based access.
 - Add inventory and lending analytics.
-- Prepare and configure a deployment workflow.
 
 ## Project status
 
